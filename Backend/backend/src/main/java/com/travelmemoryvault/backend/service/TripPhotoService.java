@@ -4,11 +4,16 @@ import com.travelmemoryvault.backend.dto.TripPhotoResponse;
 import com.travelmemoryvault.backend.entity.Trip;
 import com.travelmemoryvault.backend.entity.TripPhoto;
 import com.travelmemoryvault.backend.entity.User;
-import com.travelmemoryvault.backend.exception.ResourceNotFoundException;
 import com.travelmemoryvault.backend.exception.PhotoTooLargeException;
+import com.travelmemoryvault.backend.exception.ResourceNotFoundException;
 import com.travelmemoryvault.backend.repository.TripPhotoRepository;
 import com.travelmemoryvault.backend.repository.TripRepository;
 import com.travelmemoryvault.backend.repository.UserRepository;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Locale;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
@@ -20,12 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
-
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Locale;
 
 @Service
 public class TripPhotoService {
@@ -39,9 +38,12 @@ public class TripPhotoService {
     private final PhotoStorage photoStorage;
     private final long maxFileSize;
 
-    public TripPhotoService(TripPhotoRepository photoRepository, TripRepository tripRepository,
-                            UserRepository userRepository, PhotoStorage photoStorage,
-                            @Value("${app.photo-storage.max-file-size-bytes:5242880}") long maxFileSize) {
+    public TripPhotoService(
+            TripPhotoRepository photoRepository,
+            TripRepository tripRepository,
+            UserRepository userRepository,
+            PhotoStorage photoStorage,
+            @Value("${app.photo-storage.max-file-size-bytes:5242880}") long maxFileSize) {
         this.photoRepository = photoRepository;
         this.tripRepository = tripRepository;
         this.userRepository = userRepository;
@@ -111,6 +113,66 @@ public class TripPhotoService {
         deleteAfterCommit(storageKey);
     }
 
+    @Transactional
+    public Trip uploadCover(Long tripId, String email, MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("Choose an image to upload.");
+        }
+        if (file.getSize() > maxFileSize) {
+            throw new PhotoTooLargeException();
+        }
+
+        byte[] content = file.getBytes();
+        ImageFormat format = validateImage(content);
+        Trip trip = findOwnedTrip(tripId, email);
+
+        String oldStorageKey = trip.getCoverPhotoKey();
+        String newStorageKey = photoStorage.store(content, format.extension());
+
+        try {
+            trip.setCoverPhotoKey(newStorageKey);
+            trip.setCoverContentType(format.contentType());
+            Trip saved = tripRepository.saveAndFlush(trip);
+            if (oldStorageKey != null && !oldStorageKey.isBlank()) {
+                deleteAfterCommit(oldStorageKey);
+            }
+            return saved;
+        } catch (RuntimeException ex) {
+            try {
+                photoStorage.delete(newStorageKey);
+            } catch (IOException cleanupException) {
+                ex.addSuppressed(cleanupException);
+                log.error("Failed to clean up cover photo after persistence failed ({}).",
+                        cleanupException.getClass().getSimpleName());
+            }
+            throw ex;
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public StoredPhoto readCover(Long tripId, String email) throws IOException {
+        Trip trip = findOwnedTrip(tripId, email);
+        if (trip.getCoverPhotoKey() == null || trip.getCoverPhotoKey().isBlank()) {
+            throw new ResourceNotFoundException("Cover photo not found.");
+        }
+        return new StoredPhoto(photoStorage.read(trip.getCoverPhotoKey()),
+                trip.getCoverContentType() != null ? trip.getCoverContentType() : "image/jpeg");
+    }
+
+    @Transactional
+    public Trip deleteCover(Long tripId, String email) {
+        Trip trip = findOwnedTrip(tripId, email);
+        if (trip.getCoverPhotoKey() == null || trip.getCoverPhotoKey().isBlank()) {
+            return trip;
+        }
+        String oldStorageKey = trip.getCoverPhotoKey();
+        trip.setCoverPhotoKey(null);
+        trip.setCoverContentType(null);
+        Trip saved = tripRepository.saveAndFlush(trip);
+        deleteAfterCommit(oldStorageKey);
+        return saved;
+    }
+
     public void deleteStoredPhoto(String storageKey) {
         try {
             photoStorage.delete(storageKey);
@@ -145,10 +207,12 @@ public class TripPhotoService {
             if (input == null) {
                 throw new IllegalArgumentException("The selected file is not a supported image.");
             }
+
             Iterator<ImageReader> readers = ImageIO.getImageReaders(input);
             if (!readers.hasNext()) {
                 throw new IllegalArgumentException("The selected file is not a supported image.");
             }
+
             ImageReader reader = readers.next();
             try {
                 reader.setInput(input, true, true);
@@ -156,18 +220,25 @@ public class TripPhotoService {
                 ImageFormat imageFormat = switch (format) {
                     case "png" -> new ImageFormat("png", "image/png");
                     case "jpeg", "jpg" -> new ImageFormat("jpg", "image/jpeg");
-                    case "gif" -> new ImageFormat("gif", "image/gif");
-                    default -> throw new IllegalArgumentException("Only JPEG, PNG, and GIF images are supported.");
+                    case "webp" -> new ImageFormat("webp", "image/webp");
+                    default -> throw new IllegalArgumentException(
+                            "Only JPEG, PNG, and WebP images are supported.");
                 };
+
                 int width = reader.getWidth(0);
                 int height = reader.getHeight(0);
                 if (width <= 0 || height <= 0 || (long) width * height > MAX_IMAGE_PIXELS) {
                     throw new IllegalArgumentException("Image dimensions are too large.");
                 }
+
                 if (reader.read(0) == null) {
                     throw new IllegalArgumentException("The selected file is not a valid image.");
                 }
                 return imageFormat;
+            } catch (IllegalArgumentException ex) {
+                throw ex;
+            } catch (Exception ex) {
+                throw new IllegalArgumentException("The selected file is not a valid image.");
             } finally {
                 reader.dispose();
             }

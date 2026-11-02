@@ -1,0 +1,12 @@
+{
+  "name": "travel-memory-vault",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Travel Memory Vault - Personal travel and expense tracker",
+  "scripts": {
+    "dev:frontend": "npm --prefix Frontend/travel-memory-vault-frontend run dev",
+    "build:frontend": "npm --prefix Frontend/travel-memory-vault-frontend run build",
+    "start": "powershell -ExecutionPolicy Bypass -File ./run-app.ps1"
+  }
+}
+

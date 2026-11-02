@@ -11,12 +11,16 @@ import com.travelmemoryvault.backend.repository.TripRepository;
 import com.travelmemoryvault.backend.repository.UserRepository;
 import com.travelmemoryvault.backend.service.TripPhotoService;
 import jakarta.validation.Valid;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 @RestController
@@ -30,8 +34,8 @@ public class TripController {
     private final TripPhotoService photoService;
 
     public TripController(TripRepository tripRepository, UserRepository userRepository,
-                          ExpenseRepository expenseRepository, TripPhotoRepository photoRepository,
-                          TripPhotoService photoService) {
+            ExpenseRepository expenseRepository, TripPhotoRepository photoRepository,
+            TripPhotoService photoService) {
         this.tripRepository = tripRepository;
         this.userRepository = userRepository;
         this.expenseRepository = expenseRepository;
@@ -55,7 +59,7 @@ public class TripController {
 
     @PostMapping
     public TripResponse createTrip(@Valid @RequestBody TripRequest request,
-                                   @AuthenticationPrincipal UserDetails principal) {
+            @AuthenticationPrincipal UserDetails principal) {
         validateDates(request);
 
         User user = getUser(principal);
@@ -74,7 +78,7 @@ public class TripController {
     @PutMapping("/{tripId}")
     @Transactional
     public TripResponse updateTrip(@PathVariable Long tripId, @Valid @RequestBody TripRequest request,
-                                   @AuthenticationPrincipal UserDetails principal) {
+            @AuthenticationPrincipal UserDetails principal) {
         validateDates(request);
         User user = getUser(principal);
         Trip trip = findTrip(tripId, user.getId());
@@ -101,10 +105,40 @@ public class TripController {
         List<String> storageKeys = photoRepository.findByTripIdOrderByCreatedAtDesc(tripId).stream()
                 .map(photo -> photo.getStorageKey())
                 .toList();
+        String coverKey = trip.getCoverPhotoKey();
         tripRepository.delete(trip);
         for (String storageKey : storageKeys) {
             photoService.deleteAfterCommit(storageKey);
         }
+        if (coverKey != null && !coverKey.isBlank()) {
+            photoService.deleteAfterCommit(coverKey);
+        }
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping(value = "/{tripId}/cover", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public TripResponse uploadCover(@PathVariable Long tripId,
+            @RequestPart("file") MultipartFile file,
+            @AuthenticationPrincipal UserDetails principal) throws IOException {
+        Trip trip = photoService.uploadCover(tripId, principal.getUsername(), file);
+        return toResponse(trip);
+    }
+
+    @GetMapping("/{tripId}/cover")
+    public ResponseEntity<byte[]> getCover(@PathVariable Long tripId,
+            @AuthenticationPrincipal UserDetails principal) throws IOException {
+        TripPhotoService.StoredPhoto photo = photoService.readCover(tripId, principal.getUsername());
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(photo.contentType()))
+                .cacheControl(CacheControl.noStore())
+                .header("X-Content-Type-Options", "nosniff")
+                .body(photo.content());
+    }
+
+    @DeleteMapping("/{tripId}/cover")
+    public ResponseEntity<Void> deleteCover(@PathVariable Long tripId,
+            @AuthenticationPrincipal UserDetails principal) {
+        photoService.deleteCover(tripId, principal.getUsername());
         return ResponseEntity.noContent().build();
     }
 
@@ -125,7 +159,8 @@ public class TripController {
     }
 
     private static TripResponse toResponse(Trip trip) {
+        boolean hasCover = trip.getCoverPhotoKey() != null && !trip.getCoverPhotoKey().isBlank();
         return new TripResponse(trip.getId(), trip.getDestination(), trip.getStartDate(),
-                trip.getEndDate(), trip.getBudget(), trip.getCurrency(), trip.getDescription());
+                trip.getEndDate(), trip.getBudget(), trip.getCurrency(), trip.getDescription(), hasCover);
     }
 }

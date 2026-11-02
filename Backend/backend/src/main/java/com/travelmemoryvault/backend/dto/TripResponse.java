@@ -10,5 +10,11 @@ public record TripResponse(
         LocalDate endDate,
         BigDecimal budget,
         String currency,
-        String description) {
+        String description,
+        boolean hasCover) {
+
+    public TripResponse(Long id, String destination, LocalDate startDate, LocalDate endDate,
+                        BigDecimal budget, String currency, String description) {
+        this(id, destination, startDate, endDate, budget, currency, description, false);
+    }
 }

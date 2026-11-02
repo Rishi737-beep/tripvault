@@ -15,8 +15,8 @@ export default function App() {
     <>
       <header className="masthead">
         <Link to="/" className="brand">
-          <img className="brand-logo" src="/logo.png" alt="" />
-          <span>TripVault</span>
+          <svg className="mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10.5" /><path d="M12 5.5 14 12l-2 6.5L10 12z" /></svg>
+          <span>Travel Memory <em>Vault</em></span>
         </Link>
         {authed && <button className="link" onClick={logout}>Log out</button>}
       </header>

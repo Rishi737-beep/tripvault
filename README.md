@@ -10,6 +10,7 @@ TripVault is a full-stack travel management application built to help users orga
 - **Trip Management** — Create, view, update, and manage trips.
 - **Budget Tracking** — Set a budget for each trip.
 - **Expense Management** — Record expenses and associate them with trips.
+- **Trip Photos** — Upload a private trip cover image and photo gallery.
 - **Private Photo Storage** — Store travel photos separately from public application files.
 - **REST APIs** — Handle application data through the Spring Boot backend.
 - **Responsive Interface** — Access the application through a clean web interface.
@@ -38,7 +39,8 @@ TripVault/
 ├── Frontend/
 │   └── travel-memory-vault-frontend/
 ├── images/
-├── PROJECT-REPORT.md
+├── package.json
+├── run-app.ps1
 └── README.md
 ```
 
@@ -88,7 +90,7 @@ Open a **second terminal** and run:
 
 ```powershell
 cd Frontend/travel-memory-vault-frontend
-npm install
+npm ci
 npm run dev
 ```
 

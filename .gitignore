@@ -1,3 +1,18 @@
-git status --short
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# IDE
 .idea/
 .vscode/
+
+# Dependencies and build output
+**/node_modules/
+**/dist/
+**/target/
+
+# Local uploads and logs
+**/data/private-photos/
+**/uploads/
+*.log

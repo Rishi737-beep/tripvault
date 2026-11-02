@@ -48,6 +48,12 @@ public class Trip {
     @Column(length = 1000)
     private String description;
 
+    @Column(name = "cover_photo_key", length = 80)
+    private String coverPhotoKey;
+
+    @Column(name = "cover_content_type", length = 30)
+    private String coverContentType;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
