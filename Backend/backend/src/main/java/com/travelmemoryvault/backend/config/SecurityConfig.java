@@ -40,7 +40,7 @@ public class SecurityConfig {
                           CustomUserDetailsService userDetailsService,
                           PasswordEncoder passwordEncoder,
                           JwtAuthEntryPoint jwtAuthEntryPoint,
-                          @Value("${app.cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:3000,http://127.0.0.1:3000}") String configuredAllowedOrigins) {
+                          @Value("${app.cors.allowed-origins:http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:3000,http://127.0.0.1:3000,https://localhost}") String configuredAllowedOrigins) {
         this.jwtAuthFilter = jwtAuthFilter;
         this.userDetailsService = userDetailsService;
         this.passwordEncoder = passwordEncoder;
@@ -86,7 +86,7 @@ public class SecurityConfig {
                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
                 // Public endpoints
-                .requestMatchers("/", "/api/auth/**").permitAll()
+                .requestMatchers("/", "/api/auth/**", "/actuator/health", "/actuator/health/**").permitAll()
                 // Swagger / OpenAPI UI
                 .requestMatchers(
                     "/swagger-ui/**",

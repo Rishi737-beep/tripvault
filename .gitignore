@@ -16,3 +16,14 @@
 **/data/private-photos/
 **/uploads/
 *.log
+# Android / Gradle generated files
+**/.gradle/
+**/build/
+**/local.properties
+**/.idea/
+
+# Signing keys and private credentials
+*.jks
+*.keystore
+key.properties
+rcmainresourcesapplication.properties
